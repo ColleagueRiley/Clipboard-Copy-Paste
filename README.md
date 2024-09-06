@@ -2,8 +2,10 @@
 # Introduction
 # Overview
 
+
+#output 
 ```c
-/* X11 Output*/
+/* X11 */
 static Atom UTF8 = 0;
 if (UTF8 == 0)
 	UTF8 = XInternAtom(RGFW_root->src.display, "UTF8_STRING", True);
@@ -39,7 +41,9 @@ if (target == UTF8 || target == XA_STRING) {
 }
 
 XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xselection.property);
+```
 
+```c
 /* input */
 static Atom CLIPBOARD = 0,
 	UTF8_STRING = 0,
