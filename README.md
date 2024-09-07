@@ -2,12 +2,13 @@
 # Introduction
 # Overview
 
-- Clipboard Paste 
+1) Clipboard Paste 
 - X11 (init atoms, convert section, get data)
 - Win32 (open clipboard, get data, convert data, close clipboard)
 - Cocoa (set datatypes, get pasteboard, get data, convert data)
 
-- Clipboard Copy
+
+2) Clipboard Copy
 - X11 (init atoms, convert section, handle request, send data)
 - Win32 (setup global object, convert data, open clipboard, convert string, send data, close clipboard)
 - Cocoa (create datatype array, declaretypes, convert string, send data)
