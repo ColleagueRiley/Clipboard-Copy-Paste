@@ -2,160 +2,138 @@
 # Introduction
 # Overview
 
+## input 
 
-#output 
+### X11
 ```c
-/* X11 */
-static Atom UTF8 = 0;
-if (UTF8 == 0)
-	UTF8 = XInternAtom(RGFW_root->src.display, "UTF8_STRING", True);
-
-XEvent event;
-int format;
-unsigned long N, size;
-char* data, * s = NULL;
-Atom target;
-Atom CLIPBOARD = 0, XSEL_DATA = 0;
-
-if (CLIPBOARD == 0) {
-	CLIPBOARD = XInternAtom(RGFW_root->src.display, "CLIPBOARD", 0);
-	XSEL_DATA = XInternAtom(RGFW_root->src.display, "XSEL_DATA", 0);
-}
-
-XConvertSelection(RGFW_root->src.display, CLIPBOARD, UTF8, XSEL_DATA, RGFW_root->src.window, CurrentTime);
-XSync(RGFW_root->src.display, 0);
-XNextEvent(RGFW_root->src.display, &event);
-
-if (event.type != SelectionNotify || event.xselection.selection != CLIPBOARD || event.xselection.property == 0)
-	return NULL;
-
-XGetWindowProperty(event.xselection.display, event.xselection.requestor,
-	event.xselection.property, 0L, (~0L), 0, AnyPropertyType, &target,
-	&format, &size, &N, (unsigned char**) &data);
-
-if (target == UTF8 || target == XA_STRING) {
-	s = (char*)RGFW_MALLOC(sizeof(char) * size);
-	strncpy(s, data, size);
-	s[size] = '\0';
-	XFree(data);
-}
-
-XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xselection.property);
+const Atom UTF8 = XInternAtom(display, "UTF8_STRING", True);
+const Atom CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0);
+const Atom XSEL_DATA = XInternAtom(display, "XSEL_DATA", 0);
 ```
 
 ```c
-/* Winapi input */
-/* Open the clipboard */
+XConvertSelection(display, CLIPBOARD, UTF8, XSEL_DATA, window, CurrentTime);
+XSync(display, 0);
+```
+
+```c
+XEvent event;
+XNextEvent(display, &event);
+
+if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
+```
+
+```c
+    int format;
+    unsigned long N, size;
+    char* data, * s = NULL;
+    Atom target;
+
+    XGetWindowProperty(event.xselection.display, event.xselection.requestor,
+	    event.xselection.property, 0L, (~0L), 0, AnyPropertyType, &target,
+	    &format, &size, &N, (unsigned char**) &data);
+```
+
+```c 
+    if (target == UTF8 || target == XA_STRING) {
+```
+
+```c
+        XFree(data);
+    }
+
+    XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xselection.property);
+}
+```
+
+### winapi
+
+Open the clipboard
+```c
 if (OpenClipboard(NULL) == 0)
 	return (char*) "";
+```
 
-/* Get the clipboard data as a Unicode string */
+Get the clipboard data as a Unicode string
+```c
 HANDLE hData = GetClipboardData(CF_UNICODETEXT);
 if (hData == NULL) {
 	CloseClipboard();
 	return (char*) "";
 }
-
-wchar_t* wstr = (wchar_t*) GlobalLock(hData);
-
-char* text;
-
-{
-	setlocale(LC_ALL, "en_US.UTF-8");
-
-	size_t textLen = wcstombs(NULL, wstr, 0);
-	if (textLen == 0)
-		return (char*) "";
-
-	text = (char*) RGFW_MALLOC((textLen * sizeof(char)) + 1);
-
-	wcstombs(text, wstr, (textLen) +1);
-
-	text[textLen] = '\0';
-}
-
-/* Release the clipboard data */
-GlobalUnlock(hData);
-CloseClipboard();
-
-return text;
-
 ```
-/* winapi output */
-HANDLE object;
-WCHAR* buffer;
+```
+wchar_t* wstr = (wchar_t*) GlobalLock(hData);
+```
 
-object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
-if (!object)
-	return;
+Get the size of the UTF-8 version
 
-buffer = (WCHAR*) GlobalLock(object);
-if (!buffer) {
-	GlobalFree(object);
-	return;
-}
+```C
+setlocale(LC_ALL, "en_US.UTF-8");
 
-MultiByteToWideChar(CP_UTF8, 0, text, -1, buffer, textLen);
-GlobalUnlock(object);
+size_t textLen = wcstombs(NULL, wstr, 0);
+```
 
-if (!OpenClipboard(RGFW_root->src.window)) {
-	GlobalFree(object);
-	return;
-}
-
-EmptyClipboard();
-SetClipboardData(CF_UNICODETEXT, object);
-CloseClipboard();
-
-
-/* cocoa input */
-char* clip = (char*)NSPasteboard_stringForType(NSPasteboard_generalPasteboard(), NSPasteboardTypeString);
-
-size_t clip_len = 1;
-
-if (clip != NULL) {
-	clip_len = strlen(clip) + 1; 
-}
-
-char* str = (char*)RGFW_MALLOC(sizeof(char) * clip_len);
-
-if (clip != NULL) {
-	strncpy(str, clip, clip_len);
-}
-
-str[clip_len] = '\0';
+convert to the utf-8 version
 
 ```c
-/* input */
-static Atom CLIPBOARD = 0,
-	UTF8_STRING = 0,
-	SAVE_TARGETS = 0,
-	TARGETS = 0,
-	MULTIPLE = 0,
-	ATOM_PAIR = 0,
-	CLIPBOARD_MANAGER = 0;
+if (textLen) {
+	char* text = (char*) RGFW_MALLOC((textLen * sizeof(char)) + 1);
 
-if (CLIPBOARD == 0) {
-	CLIPBOARD = XInternAtom((Display*) RGFW_root->src.display, "CLIPBOARD", False);
-	UTF8_STRING = XInternAtom((Display*) RGFW_root->src.display, "UTF8_STRING", False);
-	SAVE_TARGETS = XInternAtom((Display*) RGFW_root->src.display, "SAVE_TARGETS", False);
-	TARGETS = XInternAtom((Display*) RGFW_root->src.display, "TARGETS", False);
-	MULTIPLE = XInternAtom((Display*) RGFW_root->src.display, "MULTIPLE", False);
-	ATOM_PAIR = XInternAtom((Display*) RGFW_root->src.display, "ATOM_PAIR", False);
-	CLIPBOARD_MANAGER = XInternAtom((Display*) RGFW_root->src.display, "CLIPBOARD_MANAGER", False);
+	wcstombs(text, wstr, (textLen) + 1);
+	text[textLen] = '\0';
+
+    free(text);
 }
+```
 
-XSetSelectionOwner((Display*) RGFW_root->src.display, CLIPBOARD, (Window) RGFW_root->src.window, CurrentTime);
+free leftover data
 
-XConvertSelection((Display*) RGFW_root->src.display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, (Window) RGFW_root->src.window, CurrentTime);
-for (;;) {
-	XEvent event;
+```c
+GlobalUnlock(hData);
+CloseClipboard();
+```
 
-	XNextEvent((Display*) RGFW_root->src.display, &event);
-	if (event.type != SelectionRequest) {
-		break;
-	}
+### cocoa
 
+```c
+NSPasteboardType const NSPasteboardTypeString = "public.utf8-plain-text";
+
+NSString* datatype = objc_msgSend_class_char(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), NSPasteboardTypeString1);
+```
+
+```c
+NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard")); 
+
+NSString* clip = ((id(*)(id, SEL, const char*))objc_msgSend)(pasteboard, sel_registerName("stringForType:"), dataType);
+char* str = ((const char* (*)(id, SEL)) objc_msgSend) (clip, sel_registerName("UTF8String"));
+```
+
+## output
+
+### X11
+
+```c
+const Atom CLIPBOARD = XInternAtom((Display*) display, "CLIPBOARD", False);
+const Atom UTF8_STRING = XInternAtom((Display*) display, "UTF8_STRING", False);
+const Atom SAVE_TARGETS = XInternAtom((Display*) display, "SAVE_TARGETS", False);
+const Atom TARGETS = XInternAtom((Display*) display, "TARGETS", False);
+const Atom MULTIPLE = XInternAtom((Display*) display, "MULTIPLE", False);
+const Atom ATOM_PAIR = XInternAtom((Display*) display, "ATOM_PAIR", False);
+const Atom CLIPBOARD_MANAGER = XInternAtom((Display*) display, "CLIPBOARD_MANAGER", False);
+```
+
+```c
+XSetSelectionOwner((Display*) display, CLIPBOARD, (Window) window, CurrentTime);
+
+XConvertSelection((Display*) display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, (Window) window, CurrentTime);
+```
+
+```c
+if (event.type = SelectionRequest) {
+```
+
+```c
 	const XSelectionRequestEvent* request = &event.xselectionrequest;
 
 	XEvent reply = { SelectionNotify };
@@ -170,7 +148,7 @@ for (;;) {
 								UTF8_STRING,
 								XA_STRING };
 
-		XChangeProperty((Display*) RGFW_root->src.display,
+		XChangeProperty((Display*) display,
 			request->requestor,
 			request->property,
 			4,
@@ -189,7 +167,7 @@ for (;;) {
 		int actualFormat = 0;
 		unsigned long count = 0, bytesAfter = 0;
 
-		XGetWindowProperty((Display*) RGFW_root->src.display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (u8**) &targets);
+		XGetWindowProperty((Display*) display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (u8**) &targets);
 
 		unsigned long i;
 		for (i = 0; i < (u32)count; i += 2) {
@@ -202,7 +180,7 @@ for (;;) {
 
 			if (j < formatCount)
 			{
-				XChangeProperty((Display*) RGFW_root->src.display,
+				XChangeProperty((Display*) display,
 					request->requestor,
 					targets[i + 1],
 					targets[i],
@@ -210,13 +188,13 @@ for (;;) {
 					PropModeReplace,
 					(u8*) text,
 					textLen);
-				XFlush(RGFW_root->src.display);
+				XFlush(display);
 			} else {
 				targets[i + 1] = None;
 			}
 		}
 
-		XChangeProperty((Display*) RGFW_root->src.display,
+		XChangeProperty((Display*) display,
 			request->requestor,
 			request->property,
 			ATOM_PAIR,
@@ -225,7 +203,7 @@ for (;;) {
 			(u8*) targets,
 			count);
 
-		XFlush(RGFW_root->src.display);
+		XFlush(display);
 		XFree(targets);
 
 		reply.xselection.property = request->property;
@@ -237,18 +215,46 @@ for (;;) {
 	reply.xselection.target = request->target;
 	reply.xselection.time = request->time;
 
-	XSendEvent((Display*) RGFW_root->src.display, request->requestor, False, 0, &reply);
-	XFlush(RGFW_root->src.display);
+	XSendEvent((Display*) display, request->requestor, False, 0, &reply);
+	XFlush(display);
 }
-
-
-/* cocoa output */
-RGFW_UNUSED(textLen);
-
-NSPasteboardType array[] = { NSPasteboardTypeString, NULL };
-NSPasteBoard_declareTypes(NSPasteboard_generalPasteboard(), array, 1, NULL);
-
-NSPasteBoard_setString(NSPasteboard_generalPasteboard(), text, NSPasteboardTypeString);
 ```
 
+### winapi
 
+```c
+HANDLE object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
+
+WCHA*  buffer = (WCHAR*) GlobalLock(object);
+if (!buffer) {
+	GlobalFree(object);
+	return;
+}
+```
+
+```c
+MultiByteToWideChar(CP_UTF8, 0, text, -1, buffer, textLen);
+```
+
+```c
+GlobalUnlock(object);
+if (!OpenClipboard(window)) {
+	GlobalFree(object);
+	return;
+}
+
+EmptyClipboard();
+SetClipboardData(CF_UNICODETEXT, object);
+CloseClipboard();
+```
+
+### cocoa
+
+```c
+NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard")); 
+
+NSPasteboardType array[] = { NSPasteboardTypeString, NULL };
+NSPasteBoard_declareTypes(pasteboard, array, 1, NULL);
+
+NSPasteBoard_setString(pasteboard, text, NSPasteboardTypeString);
+```
