@@ -44,6 +44,88 @@ XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xsel
 ```
 
 ```c
+/* Winapi input */
+/* Open the clipboard */
+if (OpenClipboard(NULL) == 0)
+	return (char*) "";
+
+/* Get the clipboard data as a Unicode string */
+HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+if (hData == NULL) {
+	CloseClipboard();
+	return (char*) "";
+}
+
+wchar_t* wstr = (wchar_t*) GlobalLock(hData);
+
+char* text;
+
+{
+	setlocale(LC_ALL, "en_US.UTF-8");
+
+	size_t textLen = wcstombs(NULL, wstr, 0);
+	if (textLen == 0)
+		return (char*) "";
+
+	text = (char*) RGFW_MALLOC((textLen * sizeof(char)) + 1);
+
+	wcstombs(text, wstr, (textLen) +1);
+
+	text[textLen] = '\0';
+}
+
+/* Release the clipboard data */
+GlobalUnlock(hData);
+CloseClipboard();
+
+return text;
+
+```
+/* winapi output */
+HANDLE object;
+WCHAR* buffer;
+
+object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
+if (!object)
+	return;
+
+buffer = (WCHAR*) GlobalLock(object);
+if (!buffer) {
+	GlobalFree(object);
+	return;
+}
+
+MultiByteToWideChar(CP_UTF8, 0, text, -1, buffer, textLen);
+GlobalUnlock(object);
+
+if (!OpenClipboard(RGFW_root->src.window)) {
+	GlobalFree(object);
+	return;
+}
+
+EmptyClipboard();
+SetClipboardData(CF_UNICODETEXT, object);
+CloseClipboard();
+
+
+/* cocoa input */
+char* clip = (char*)NSPasteboard_stringForType(NSPasteboard_generalPasteboard(), NSPasteboardTypeString);
+
+size_t clip_len = 1;
+
+if (clip != NULL) {
+	clip_len = strlen(clip) + 1; 
+}
+
+char* str = (char*)RGFW_MALLOC(sizeof(char) * clip_len);
+
+if (clip != NULL) {
+	strncpy(str, clip, clip_len);
+}
+
+str[clip_len] = '\0';
+
+```c
 /* input */
 static Atom CLIPBOARD = 0,
 	UTF8_STRING = 0,
@@ -159,85 +241,6 @@ for (;;) {
 	XFlush(RGFW_root->src.display);
 }
 
-/* Winapi input */
-/* Open the clipboard */
-if (OpenClipboard(NULL) == 0)
-	return (char*) "";
-
-/* Get the clipboard data as a Unicode string */
-HANDLE hData = GetClipboardData(CF_UNICODETEXT);
-if (hData == NULL) {
-	CloseClipboard();
-	return (char*) "";
-}
-
-wchar_t* wstr = (wchar_t*) GlobalLock(hData);
-
-char* text;
-
-{
-	setlocale(LC_ALL, "en_US.UTF-8");
-
-	size_t textLen = wcstombs(NULL, wstr, 0);
-	if (textLen == 0)
-		return (char*) "";
-
-	text = (char*) RGFW_MALLOC((textLen * sizeof(char)) + 1);
-
-	wcstombs(text, wstr, (textLen) +1);
-
-	text[textLen] = '\0';
-}
-
-/* Release the clipboard data */
-GlobalUnlock(hData);
-CloseClipboard();
-
-return text;
-
-/* winapi output */
-HANDLE object;
-WCHAR* buffer;
-
-object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
-if (!object)
-	return;
-
-buffer = (WCHAR*) GlobalLock(object);
-if (!buffer) {
-	GlobalFree(object);
-	return;
-}
-
-MultiByteToWideChar(CP_UTF8, 0, text, -1, buffer, textLen);
-GlobalUnlock(object);
-
-if (!OpenClipboard(RGFW_root->src.window)) {
-	GlobalFree(object);
-	return;
-}
-
-EmptyClipboard();
-SetClipboardData(CF_UNICODETEXT, object);
-CloseClipboard();
-
-
-/* cocoa input */
-char* clip = (char*)NSPasteboard_stringForType(NSPasteboard_generalPasteboard(), NSPasteboardTypeString);
-
-size_t clip_len = 1;
-
-if (clip != NULL) {
-	clip_len = strlen(clip) + 1; 
-}
-
-char* str = (char*)RGFW_MALLOC(sizeof(char) * clip_len);
-
-if (clip != NULL) {
-	strncpy(str, clip, clip_len);
-}
-
-str[clip_len] = '\0';
 
 /* cocoa output */
 RGFW_UNUSED(textLen);
@@ -247,3 +250,5 @@ NSPasteBoard_declareTypes(NSPasteboard_generalPasteboard(), array, 1, NULL);
 
 NSPasteBoard_setString(NSPasteboard_generalPasteboard(), text, NSPasteboardTypeString);
 ```
+
+
