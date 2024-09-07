@@ -51,7 +51,7 @@ if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && 
 Open the clipboard
 ```c
 if (OpenClipboard(NULL) == 0)
-	return (char*) "";
+	return 0;
 ```
 
 Get the clipboard data as a Unicode string
@@ -59,9 +59,10 @@ Get the clipboard data as a Unicode string
 HANDLE hData = GetClipboardData(CF_UNICODETEXT);
 if (hData == NULL) {
 	CloseClipboard();
-	return (char*) "";
+	return 0;
 }
 ```
+
 ```
 wchar_t* wstr = (wchar_t*) GlobalLock(hData);
 ```
@@ -78,7 +79,7 @@ convert to the utf-8 version
 
 ```c
 if (textLen) {
-	char* text = (char*) RGFW_MALLOC((textLen * sizeof(char)) + 1);
+	char* text = (char*) malloc((textLen * sizeof(char)) + 1);
 
 	wcstombs(text, wstr, (textLen) + 1);
 	text[textLen] = '\0';
@@ -233,10 +234,10 @@ if (event.type == SelectionRequest) {
 ```c
 HANDLE object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
 
-WCHA*  buffer = (WCHAR*) GlobalLock(object);
+WCHAR*  buffer = (WCHAR*) GlobalLock(object);
 if (!buffer) {
 	GlobalFree(object);
-	return;
+	return 0;
 }
 ```
 
@@ -246,9 +247,9 @@ MultiByteToWideChar(CP_UTF8, 0, text, -1, buffer, textLen);
 
 ```c
 GlobalUnlock(object);
-if (!OpenClipboard(window)) {
+if (!OpenClipboard(NULL)) {
 	GlobalFree(object);
-	return;
+	return 0;
 }
 
 EmptyClipboard();
