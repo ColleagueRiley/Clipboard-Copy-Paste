@@ -1,8 +1,18 @@
-# RGFW Under the Hood: Clipboard I/O
+# RGFW Under the Hood: Clipboard Copy/Paste
 # Introduction
 # Overview
 
-## input 
+- Clipboard Paste 
+- X11 (init atoms, convert section, get data)
+- Win32 (open clipboard, get data, convert data, close clipboard)
+- Cocoa (set datatypes, get pasteboard, get data, convert data)
+
+- Clipboard Copy
+- X11 (init atoms, convert section, handle request, send data)
+- Win32 (setup global object, convert data, open clipboard, convert string, send data, close clipboard)
+- Cocoa (create datatype array, declaretypes, convert string, send data)
+
+## Clipboard Paste
 
 ### X11
 
@@ -152,7 +162,7 @@ NSString* clip = ((id(*)(id, SEL, const char*))objc_msgSend)(pasteboard, sel_reg
 const char* str = ((const char* (*)(id, SEL)) objc_msgSend) (clip, sel_registerName("UTF8String"));
 ```
 
-## output
+## Clipboard Copy
 
 ### X11
 
