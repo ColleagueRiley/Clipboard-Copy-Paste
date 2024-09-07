@@ -1,3 +1,6 @@
+// compile with:
+// gcc x11.c -lX11
+
 #include <X11/Xlib.h>
 #include <stdio.h>
 #include <stdlib.h>

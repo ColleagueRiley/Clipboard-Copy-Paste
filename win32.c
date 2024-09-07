@@ -1,3 +1,6 @@
+// compile with:
+// gcc win32.c
+
 #include <windows.h>
 #include <locale.h>
 
