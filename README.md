@@ -114,8 +114,6 @@ char* str = ((const char* (*)(id, SEL)) objc_msgSend) (clip, sel_registerName("U
 ### X11
 
 ```c
-const Atom CLIPBOARD = XInternAtom((Display*) display, "CLIPBOARD", False);
-const Atom UTF8_STRING = XInternAtom((Display*) display, "UTF8_STRING", False);
 const Atom SAVE_TARGETS = XInternAtom((Display*) display, "SAVE_TARGETS", False);
 const Atom TARGETS = XInternAtom((Display*) display, "TARGETS", False);
 const Atom MULTIPLE = XInternAtom((Display*) display, "MULTIPLE", False);
@@ -130,77 +128,85 @@ XConvertSelection((Display*) display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, (Wi
 ```
 
 ```c
-if (event.type = SelectionRequest) {
-```
-
-```c
+if (event.type == SelectionRequest) {
 	const XSelectionRequestEvent* request = &event.xselectionrequest;
 
 	XEvent reply = { SelectionNotify };
 	reply.xselection.property = 0;
+```
 
-	const Atom formats[] = { UTF8_STRING, XA_STRING };
-	const i32 formatCount = sizeof(formats) / sizeof(formats[0]);
-
+```c
 	if (request->target == TARGETS) {
 		const Atom targets[] = { TARGETS,
 								MULTIPLE,
 								UTF8_STRING,
 								XA_STRING };
 
-		XChangeProperty((Display*) display,
+		XChangeProperty(display,
 			request->requestor,
 			request->property,
 			4,
 			32,
 			PropModeReplace,
-			(u8*) targets,
+			(unsigned char*) targets,
 			sizeof(targets) / sizeof(targets[0]));
 
 		reply.xselection.property = request->property;
 	}
+```
 
+```c
 	if (request->target == MULTIPLE) {
+
 		Atom* targets = NULL;
 
 		Atom actualType = 0;
 		int actualFormat = 0;
 		unsigned long count = 0, bytesAfter = 0;
 
-		XGetWindowProperty((Display*) display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (u8**) &targets);
+		XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char **) &targets);
+```
 
-		unsigned long i;
-		for (i = 0; i < (u32)count; i += 2) {
-			i32 j;
+```c
+        const Atom formats[] = { UTF8_STRING, XA_STRING };
+		unsigned long i, j;
+		for (i = 0; i < count; i += 2) {
+			Bool found = False;
 
-			for (j = 0; j < formatCount; j++) {
-				if (targets[i] == formats[j])
+            for (j = 0; j < 2; j++) {
+				if (targets[i] == formats[j]) {
+                    found = True;
 					break;
-			}
+			    }
+            }
+```
 
-			if (j < formatCount)
-			{
+```c
+			if (j < 2 && found) {
 				XChangeProperty((Display*) display,
 					request->requestor,
 					targets[i + 1],
 					targets[i],
 					8,
 					PropModeReplace,
-					(u8*) text,
-					textLen);
+					(unsigned char*) text,
+					sizeof(text));
 				XFlush(display);
+				running = False;
 			} else {
 				targets[i + 1] = None;
 			}
 		}
+```
 
+```c
 		XChangeProperty((Display*) display,
 			request->requestor,
 			request->property,
 			ATOM_PAIR,
 			32,
 			PropModeReplace,
-			(u8*) targets,
+			(unsigned char*) targets,
 			count);
 
 		XFlush(display);
@@ -208,7 +214,9 @@ if (event.type = SelectionRequest) {
 
 		reply.xselection.property = request->property;
 	}
+```
 
+```c
 	reply.xselection.display = request->display;
 	reply.xselection.requestor = request->requestor;
 	reply.xselection.selection = request->selection;
@@ -253,8 +261,21 @@ CloseClipboard();
 ```c
 NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard")); 
 
-NSPasteboardType array[] = { NSPasteboardTypeString, NULL };
-NSPasteBoard_declareTypes(pasteboard, array, 1, NULL);
+NSString* datatype = objc_msgSend_class_char(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), NSPasteboardTypeString1);
+```
 
+```c
+NSPasteboardType ntypes[] = { dataType, NULL };
+
+NSArray* array = ((id (*)(id, SEL, void*, NSUInteger))objc_msgSend)
+					(NSAlloc(objc_getClass("NSArray")), sel_registerName("initWithObjects:count:"), ntypes, 1);
+```
+
+```c
+((NSInteger(*)(id, SEL, id, void*))objc_msgSend) (pasteboard, sel_registerName("declareTypes:owner:"), array, owner);
+NSRelease(array);
+```
+
+```c
 NSPasteBoard_setString(pasteboard, text, NSPasteboardTypeString);
 ```
