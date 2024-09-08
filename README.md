@@ -26,9 +26,9 @@ To handle the clipboard, you must create some Atoms via [`XInternAtom`](https://
 
 You'll need three atoms, 
 
-1) UTF8_STRING : Atom for a UTF-8 string.
-2) CLIPBOARD : Atom for getting clipboard data.
-3) XSEL_DATA : Atom to get selection data.
+1) UTF8_STRING: Atom for a UTF-8 string.
+2) CLIPBOARD: Atom for getting clipboard data.
+3) XSEL_DATA: Atom to get selection data.
 
 ```c
 const Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
@@ -38,7 +38,7 @@ const Atom XSEL_DATA = XInternAtom(display, "XSEL_DATA", 0);
 
 Now, to get the clipboard data you have to request that the clipboard section be converted to UTF8 via [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
 
-Then use [`XSync`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) to make sure the request is sent to the server. 
+Then use [`XSync`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) to send the request to the server. 
 
 ```c
 XConvertSelection(display, CLIPBOARD, UTF8_STRING, XSEL_DATA, window, CurrentTime);
@@ -52,7 +52,7 @@ XEvent event;
 XNextEvent(display, &event);
 ```
 
-Then make sure the event is a `SelectionNotify` event. Then use `.selection` to make sure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrieved.
+Then make sure the event is a `SelectionNotify` event. Then use `.selection` to ensure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrieved.
 
 ```c
 if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
@@ -110,15 +110,15 @@ if (hData == NULL) {
 }
 ```
 
-Next, you need to convert the Unicode data back to utf-8.  
+Next, you need to convert the Unicode data back to utf8.  
 
-Start by locking memory for the utf-8 data via [`GlobalLock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock).
+Start by locking memory for the utf8 data via [`GlobalLock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock).
 
 ```
 wchar_t* wstr = (wchar_t*) GlobalLock(hData);
 ```
 
-Use [`setlocale`](https://en.cppreference.com/w/c/locale/setlocale) to ensure the data format is utf-8.
+Use [`setlocale`](https://en.cppreference.com/w/c/locale/setlocale) to ensure the data format is utf8.
 
 Get the size of the UTF-8 version via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
 
@@ -128,7 +128,7 @@ setlocale(LC_ALL, "en_US.UTF-8");
 size_t textLen = wcstombs(NULL, wstr, 0);
 ```
 
-If the size is valid, conver the data via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
+If the size is valid, convert the data via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
 
 ```c
 if (textLen) {
@@ -215,14 +215,14 @@ if (event.type == SelectionRequest) {
     const XSelectionRequestEvent* request = &event.xselectionrequest;
 ```
 
-At the end of the SelectionNotify event, a response will be sent back to the requester. The structure should be created here and it will be modified depending on the request data. 
+At the end of the SelectionNotify event, a response will be sent back to the requester. The structure should be created here and modified depending on the request data. 
 
 ```c
 	XEvent reply = { SelectionNotify };
 	reply.xselection.property = 0;
 ```
 
-The first target we will handle is `TARGETS`, this is when the requestor wants to know what targets are supported.
+The first target we will handle is `TARGETS` when the requestor wants to know which targets are supported.
 
 ```c
 	if (request->target == TARGETS) {
@@ -239,7 +239,7 @@ I will create an array of supported targets
 
 This array can be passed using [`XChangeProperty`](https://tronche.com/gui/x/xlib/window-information/XChangeProperty.html).
 
-I'll also change the selection property so that way the requestor knows what property we changed.
+I'll also change the selection property so the requestor knows what property we changed.
 
 ```c
 		XChangeProperty(display,
@@ -296,7 +296,7 @@ If the target is not used, the second argument should be set to None, marking it
 		}
 ```
 
-Now, you can pass the final array of supported targets back to the requestor via `XChangeProperty`. This tells the requestor which targets to expect for the original list it sent. 
+Now, you can pass the final array of supported targets to the requestor via `XChangeProperty`. This tells the requestor which targets to expect for the original list it sent. 
 
 The message will be sent out asap when [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) is called. 
 
@@ -319,9 +319,9 @@ Then you can free your copy of the target array with `XFree`.
 	}
 ```
 
-Now for the final step of the event, sending the selection even back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
+Now for the final step of the event, sending the selection back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
 
-Then send out the event via [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html).
+Then send the event via [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html).
 
 ```c
 	reply.xselection.display = request->display;
@@ -379,7 +379,7 @@ NSArray* array = ((id (*)(id, SEL, void*, NSUInteger))objc_msgSend)
 
 Then use  [`declareTypes`](https://developer.apple.com/documentation/appkit/nspasteboard/1533561-declaretypes) to declare the array as the supported data types.
 
-Now you can also free the NSArray via [`NSRelease`](https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571957-release).
+You can also free the NSArray via [`NSRelease`](https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571957-release).
 
 ```c
 ((NSInteger(*)(id, SEL, id, void*))objc_msgSend) (pasteboard, sel_registerName("declareTypes:owner:"), array, NULL);
