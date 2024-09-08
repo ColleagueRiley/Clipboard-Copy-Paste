@@ -151,7 +151,7 @@ CloseClipboard();
 ```
 
 ### cocoa
-Cocoa uses [`NSPasteboardTypeString`](https://developer.apple.com/documentation/appkit/nspasteboardtypestring) for asking for a string data. You'll have to define this yourself if you're using Objective-C.
+Cocoa uses [`NSPasteboardTypeString`](https://developer.apple.com/documentation/appkit/nspasteboardtypestring) for asking for a string data. You'll have to define this yourself if you're not using Objective-C.
 
 ```c
 NSPasteboardType const NSPasteboardTypeString = "public.utf8-plain-text";
@@ -169,9 +169,9 @@ Now we'll use [`generalPasteboard`](https://developer.apple.com/documentation/ui
 NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard")); 
 ```
 
-Then you can get the pasteboard's string data using `dataType` via [`stringForType`](https://developer.apple.com/documentation/appkit/nspasteboard/1533566-stringfortype).
+Then you can get the pasteboard's string data with the `dataType` using [`stringForType`](https://developer.apple.com/documentation/appkit/nspasteboard/1533566-stringfortype).
 
-However, it will give you an NSString, which can be converted via [`UTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1411189-utf8string).
+However, it will give you an NSString, which can be converted with [`UTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1411189-utf8string).
 
 ```c
 NSString* clip = ((id(*)(id, SEL, const char*))objc_msgSend)(pasteboard, sel_registerName("stringForType:"), dataType);
@@ -323,7 +323,7 @@ Then you can free your copy of the target array with `XFree`.
 
 Now for the final step of the event, sending the selection back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
 
-Then send the event via [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html).
+Then flush the queue with [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html).
 
 ```c
 	reply.xselection.display = request->display;
@@ -338,7 +338,7 @@ Then send the event via [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/ma
 ```
 
 ### winapi
-Firt allocate global memory for your data and your utf-8 buffer via [`GlobalAlloc`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalalloc)
+First allocate global memory for your data and your utf-8 buffer via [`GlobalAlloc`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalalloc)
 
 ```c
 HANDLE object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
@@ -358,7 +358,7 @@ GlobalUnlock(object);
 OpenClipboard(NULL);
 ```
 
-Now to update the clipboard data, you start by clearing what's currently on the clipboard via  [`EmptyClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-emptyclipboard) then you can use  [`SetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata) to set the data to the utf8 object.
+To update the clipboard data, you start by clearing what's currently on the clipboard via  [`EmptyClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-emptyclipboard) then you can use  [`SetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata) to set the data to the utf8 object.
 
 Finally, close the clipboard via `CloseClipboard`.
 
@@ -370,7 +370,7 @@ CloseClipboard();
 ```
 
 ### cocoa
-First create an array of the type of data you want to put on the clipboard, then convert it to an NSArray via [`initWithObjects`](https://developer.apple.com/documentation/foundation/nsarray/1460068-initwithobjects).
+Start by creating an array of the type of data you want to put on the clipboard, then convert it to an NSArray via [`initWithObjects`](https://developer.apple.com/documentation/foundation/nsarray/1460068-initwithobjects).
 
 ```c
 NSPasteboardType ntypes[] = { dataType };
