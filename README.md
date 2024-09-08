@@ -38,29 +38,29 @@ const Atom CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0);
 const Atom XSEL_DATA = XInternAtom(display, "XSEL_DATA", 0);
 ```
 
-Now, to get the clipboard data you have to request that the clipboard section be converted to UTF8 via [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
+Now, to get the clipboard data you have to request that the clipboard section be converted to UTF8 using [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
 
-Then use [`XSync`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) to send the request to the server. 
+ use [`XSync`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) to send the request to the server. 
 
 ```c
 XConvertSelection(display, CLIPBOARD, UTF8_STRING, XSEL_DATA, window, CurrentTime);
 XSync(display, 0);
 ```
 
-The selection will be converted and sent back to the client as a [`XSelectionNotify`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSelectionEvent.3.html) event. You can get the next event, which should be the `SelectionNotify` event via [`XNextEvent`](https://tronche.com/gui/x/xlib/event-handling/manipulating-event-queue/XNextEvent.html).
+The selection will be converted and sent back to the client as a [`XSelectionNotify`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSelectionEvent.3.html) event. You can get the next event, which should be the `SelectionNotify` event with [`XNextEvent`](https://tronche.com/gui/x/xlib/event-handling/manipulating-event-queue/XNextEvent.html).
 
 ```c
 XEvent event;
 XNextEvent(display, &event);
 ```
 
-Then make sure the event is a `SelectionNotify` event. Then use `.selection` to ensure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrieved.
+ make sure the event is a `SelectionNotify` event.  use `.selection` to ensure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrieved.
 
 ```c
 if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
 ```
 
-Now you can get the converted data via [`XGetWindowProperty`](https://www.x.org/releases/X11R7.5/doc/man/man3/XChangeProperty.3.html) using the selection property. 
+You can get the converted data via [`XGetWindowProperty`](https://www.x.org/releases/X11R7.5/doc/man/man3/XChangeProperty.3.html) using the selection property. 
 
 ```c
     int format;
@@ -79,7 +79,7 @@ Make sure the data is in the right format by checking `target`
     if (target == UTF8_STRING || target == XA_STRING) {
 ```
 
-The data is stored in `data`, once you're done with it free it via [`XFree`](https://software.cfht.hawaii.edu/man/x11/XFree(3x)).
+The data is stored in `data`, once you're done with it free it with [`XFree`](https://software.cfht.hawaii.edu/man/x11/XFree(3x)).
 
 You can also delete the property via [`XDeleteProperty`](https://tronche.com/gui/x/xlib/window-information/XDeleteProperty.html).
 
@@ -102,7 +102,7 @@ if (OpenClipboard(NULL) == 0)
 
 Get the clipboard data as a Unicode string via [`GetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboarddata)
 
-If the data is NULL, you should close the clipboard via [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard)
+If the data is NULL, you should close the clipboard using [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard)
 
 ```c
 HANDLE hData = GetClipboardData(CF_UNICODETEXT);
@@ -122,7 +122,7 @@ wchar_t* wstr = (wchar_t*) GlobalLock(hData);
 
 Use [`setlocale`](https://en.cppreference.com/w/c/locale/setlocale) to ensure the data format is utf8.
 
-Get the size of the UTF-8 version via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
+Get the size of the UTF-8 version with [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
 
 ```C
 setlocale(LC_ALL, "en_US.UTF-8");
@@ -130,7 +130,7 @@ setlocale(LC_ALL, "en_US.UTF-8");
 size_t textLen = wcstombs(NULL, wstr, 0);
 ```
 
-If the size is valid, convert the data via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
+If the size is valid, convert the data using [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
 
 ```c
 if (textLen) {
@@ -143,7 +143,7 @@ if (textLen) {
 }
 ```
 
-Then free leftover global data using   [`GlobalUnlock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalunlock) and close the clipboard with [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard).
+Make sure to free leftover global data using [`GlobalUnlock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalunlock) and close the clipboard with [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard).
 
 ```c
 GlobalUnlock(hData);
@@ -199,7 +199,7 @@ const Atom ATOM_PAIR = XInternAtom((Display*) display, "ATOM_PAIR", False);
 const Atom CLIPBOARD_MANAGER = XInternAtom((Display*) display, "CLIPBOARD_MANAGER", False);
 ```
 
-Now, we can request a clipboard section. First, set the owner of the section to be a client window via [`XSetSelectionOwner`](https://tronche.com/gui/x/xlib/window-information/XSetSelectionOwner.html). Next request a converted section via [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
+We can request a clipboard section. First, set the owner of the section to be a client window via [`XSetSelectionOwner`](https://tronche.com/gui/x/xlib/window-information/XSetSelectionOwner.html). Next request a converted section using [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
  
 
 ```c
@@ -275,7 +275,7 @@ We'll start by getting the supported targets via `XGetWindowProperty`
 		XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char **) &targets);
 ```
 
-Now we'll loop through the supported targets. If the supported targets match one of our supported targets, we can pass the data via `XChangeProperty`.
+Now we'll loop through the supported targets. If the supported targets match one of our supported targets, we can pass the data with `XChangeProperty`.
 
 If the target is not used, the second argument should be set to None, marking it as unused.
 
@@ -298,11 +298,11 @@ If the target is not used, the second argument should be set to None, marking it
 		}
 ```
 
-Now, you can pass the final array of supported targets to the requestor via `XChangeProperty`. This tells the requestor which targets to expect for the original list it sent. 
+You can pass the final array of supported targets to the requestor using `XChangeProperty`. This tells the requestor which targets to expect for the original list it sent. 
 
 The message will be sent out asap when [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) is called. 
 
-Then you can free your copy of the target array with `XFree`.
+You can free your copy of the target array with `XFree`.
 
 ```c
 		XChangeProperty((Display*) display,
@@ -321,7 +321,7 @@ Then you can free your copy of the target array with `XFree`.
 	}
 ```
 
-Now for the final step of the event, sending the selection back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
+For the final step of the event, send the selection back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
 
 Then flush the queue with [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html).
 
@@ -338,7 +338,7 @@ Then flush the queue with [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/
 ```
 
 ### winapi
-First allocate global memory for your data and your utf-8 buffer via [`GlobalAlloc`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalalloc)
+First allocate global memory for your data and your utf-8 buffer with [`GlobalAlloc`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalalloc)
 
 ```c
 HANDLE object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
@@ -358,9 +358,9 @@ GlobalUnlock(object);
 OpenClipboard(NULL);
 ```
 
-To update the clipboard data, you start by clearing what's currently on the clipboard via  [`EmptyClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-emptyclipboard) then you can use  [`SetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata) to set the data to the utf8 object.
+To update the clipboard data, you start by clearing what's currently on the clipboard via  [`EmptyClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-emptyclipboard) you can use  [`SetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata) to set the data to the utf8 object.
 
-Finally, close the clipboard via `CloseClipboard`.
+Finally, close the clipboard with `CloseClipboard`.
 
 ```c
 EmptyClipboard();
@@ -370,7 +370,7 @@ CloseClipboard();
 ```
 
 ### cocoa
-Start by creating an array of the type of data you want to put on the clipboard, then convert it to an NSArray via [`initWithObjects`](https://developer.apple.com/documentation/foundation/nsarray/1460068-initwithobjects).
+Start by creating an array of the type of data you want to put on the clipboard and convert it to an NSArray using [`initWithObjects`](https://developer.apple.com/documentation/foundation/nsarray/1460068-initwithobjects).
 
 ```c
 NSPasteboardType ntypes[] = { dataType };
@@ -379,9 +379,9 @@ NSArray* array = ((id (*)(id, SEL, void*, NSUInteger))objc_msgSend)
                     (NSAlloc(objc_getClass("NSArray")), sel_registerName("initWithObjects:count:"), ntypes, 1);
 ```
 
-Then use  [`declareTypes`](https://developer.apple.com/documentation/appkit/nspasteboard/1533561-declaretypes) to declare the array as the supported data types.
+Use  [`declareTypes`](https://developer.apple.com/documentation/appkit/nspasteboard/1533561-declaretypes) to declare the array as the supported data types.
 
-You can also free the NSArray via [`NSRelease`](https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571957-release).
+You can also free the NSArray with [`NSRelease`](https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571957-release).
 
 ```c
 ((NSInteger(*)(id, SEL, id, void*))objc_msgSend) (pasteboard, sel_registerName("declareTypes:owner:"), array, NULL);
@@ -389,7 +389,7 @@ NSRelease(array);
 ```
 
 
-Now convert the string to want to copy to an NSString via `stringWithUTF8String` and set the clipboard string to be that NSString using [`setString`](https://developer.apple.com/documentation/appkit/nspasteboard/1528225-setstringhttps://developer.apple.com/documentation/objectivec/1418956-nsobject/1571957-release).
+You can convert the string to want to copy to an NSString via `stringWithUTF8String` and set the clipboard string to be that NSString using [`setString`](https://developer.apple.com/documentation/appkit/nspasteboard/1528225-setstringhttps://developer.apple.com/documentation/objectivec/1418956-nsobject/1571957-release).
 
 ```c
 NSString* nsstr = objc_msgSend_class_char(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), text);
