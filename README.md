@@ -1,5 +1,9 @@
 # RGFW Under the Hood: Clipboard Copy/Paste
 # Introduction
+Reading and writing to the clipboard using low-level APIs can be a bit tricky. There are a bunch of steps required. This tutorial aims to simplify the process so you can easily read and write to the clipboard yourself using the low level APIs.
+
+The tutorial is based on RGFW's source code and its ussage of the low level APIs.
+
 # Overview
 
 1) Clipboard Paste 
