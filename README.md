@@ -1,8 +1,8 @@
 # RGFW Under the Hood: Clipboard Copy/Paste
 # Introduction
-Reading and writing to the clipboard using low-level APIs can be a bit tricky. There are a bunch of steps required. This tutorial aims to simplify the process so you can easily read and write to the clipboard yourself using the low level APIs.
+Reading and writing to the clipboard using low-level APIs can be tricky. There are a bunch of steps required. This tutorial simplifies the process so you can easily read and write to the clipboard using the low-level APIs.
 
-The tutorial is based on RGFW's source code and its ussage of the low level APIs.
+The tutorial is based on RGFW's source code and its usage of the low-level APIs.
 
 # Overview
 
@@ -15,13 +15,13 @@ The tutorial is based on RGFW's source code and its ussage of the low level APIs
 2) Clipboard Copy
 - X11 (init atoms, convert section, handle request, send data)
 - Win32 (setup global object, convert data, open clipboard, convert string, send data, close clipboard)
-- Cocoa (create datatype array, declaretypes, convert string, send data)
+- Cocoa (create datatype array, declare types, convert string, send data)
 
 ## Clipboard Paste
 
 ### X11
 
-In order to handle the clipboard you need to create some Atoms via [`XInternAtom`](https://www.x.org/releases/X11R7.5/doc/man/man3/XInternAtom.3.html).
+To handle the clipboard, you must create some Atoms via [`XInternAtom`](https://www.x.org/releases/X11R7.5/doc/man/man3/XInternAtom.3.html).
 [X Atoms](https://tronche.com/gui/x/xlib/window-information/properties-and-atoms.html) are used to ask for or send specific data or properties through X11. 
 
 You'll need three atoms, 
@@ -52,13 +52,13 @@ XEvent event;
 XNextEvent(display, &event);
 ```
 
-Then make sure the event is a `SelectionNotify` event. Then use `.selection` to make sure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrived.
+Then make sure the event is a `SelectionNotify` event. Then use `.selection` to make sure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrieved.
 
 ```c
 if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
 ```
 
-Now you can get the convered data via [`XGetWindowProperty`](https://www.x.org/releases/X11R7.5/doc/man/man3/XChangeProperty.3.html) using the selection property. 
+Now you can get the converted data via [`XGetWindowProperty`](https://www.x.org/releases/X11R7.5/doc/man/man3/XChangeProperty.3.html) using the selection property. 
 
 ```c
     int format;
@@ -71,7 +71,7 @@ Now you can get the convered data via [`XGetWindowProperty`](https://www.x.org/r
 	    &format, &size, &N, (unsigned char**) &data);
 ```
 
-Makke sure the data is the right format by checking `target`
+Make sure the data is in the right format by checking `target`
 
 ```c 
     if (target == UTF8_STRING || target == XA_STRING) {
@@ -79,7 +79,7 @@ Makke sure the data is the right format by checking `target`
 
 The data is stored in `data`, once you're done with it free it via [`XFree`](https://software.cfht.hawaii.edu/man/x11/XFree(3x)).
 
-Lastly, delete the propety via [`XDeleteProperty`](https://tronche.com/gui/x/xlib/window-information/XDeleteProperty.html).
+You can also delete the property via [`XDeleteProperty`](https://tronche.com/gui/x/xlib/window-information/XDeleteProperty.html).
 
 ```c
         XFree(data);
@@ -110,7 +110,7 @@ if (hData == NULL) {
 }
 ```
 
-Next you need to convert the unicode data back to utf-8.  
+Next, you need to convert the Unicode data back to utf-8.  
 
 Start by locking memory for the utf-8 data via [`GlobalLock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock).
 
@@ -128,7 +128,7 @@ setlocale(LC_ALL, "en_US.UTF-8");
 size_t textLen = wcstombs(NULL, wstr, 0);
 ```
 
-If the size is valid, conver tthe data via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
+If the size is valid, conver the data via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
 
 ```c
 if (textLen) {
@@ -169,7 +169,7 @@ NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), se
 
 Then you can get the pasteboard's string data using `dataType` via [`stringForType`](https://developer.apple.com/documentation/appkit/nspasteboard/1533566-stringfortype).
 
-However it will give you an NSString, which can be convereted via [`UTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1411189-utf8string).
+However, it will give you an NSString, which can be converted via [`UTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1411189-utf8string).
 
 ```c
 NSString* clip = ((id(*)(id, SEL, const char*))objc_msgSend)(pasteboard, sel_registerName("stringForType:"), dataType);
@@ -182,11 +182,11 @@ const char* str = ((const char* (*)(id, SEL)) objc_msgSend) (clip, sel_registerN
 
 To copy to the clipboard you'll need a few more Atoms. 
 
-1) SAVE_TARGETS: is used to request a section to convert to (for copying). 
+1) SAVE_TARGETS: to request a section to convert to (for copying). 
 2) TARGETS: To handle one requested target
 3) MULTIPLE: When there are multiple request targets
-4) ATOM_PAIR: Is used to get the supported data types.
-5) CLIPBOARD_MANAGER: is used to access data from the clipboard manager.
+4) ATOM_PAIR: to get the supported data types.
+5) CLIPBOARD_MANAGER: to access data from the clipboard manager.
 
 
 ```c
@@ -197,7 +197,7 @@ const Atom ATOM_PAIR = XInternAtom((Display*) display, "ATOM_PAIR", False);
 const Atom CLIPBOARD_MANAGER = XInternAtom((Display*) display, "CLIPBOARD_MANAGER", False);
 ```
 
-Now, we can request a clipboard section. First set the owner of the section to be client window via [`XSetSelectionOwner`](https://tronche.com/gui/x/xlib/window-information/XSetSelectionOwner.html). Next request a converted section via [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
+Now, we can request a clipboard section. First, set the owner of the section to be a client window via [`XSetSelectionOwner`](https://tronche.com/gui/x/xlib/window-information/XSetSelectionOwner.html). Next request a converted section via [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
  
 
 ```c
@@ -215,7 +215,7 @@ if (event.type == SelectionRequest) {
     const XSelectionRequestEvent* request = &event.xselectionrequest;
 ```
 
-At the end of the SelectionNotify event, a response will be sent back to the requester. The structure should be created here and it will be modifed depending on the request data. 
+At the end of the SelectionNotify event, a response will be sent back to the requester. The structure should be created here and it will be modified depending on the request data. 
 
 ```c
 	XEvent reply = { SelectionNotify };
@@ -255,7 +255,7 @@ I'll also change the selection property so that way the requestor knows what pro
 	}
 ```
 
-Next I will handle `MULTIPLE` targets.
+Next, I will handle `MULTIPLE` targets.
 
 ```c
 	if (request->target == MULTIPLE) {
@@ -273,7 +273,7 @@ We'll start by getting the supported targets via `XGetWindowProperty`
 		XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char **) &targets);
 ```
 
-Now we'll loop trhough the supported targets. If the supported targets matches one of our supported targets, we can pass the data via `XChangeProperty`.
+Now we'll loop through the supported targets. If the supported targets match one of our supported targets, we can pass the data via `XChangeProperty`.
 
 If the target is not used, the second argument should be set to None, marking it as unused.
 
@@ -319,7 +319,7 @@ Then you can free your copy of the target array with `XFree`.
 	}
 ```
 
-Now for the final step of the event, sending selection even back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
+Now for the final step of the event, sending the selection even back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
 
 Then send out the event via [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html).
 
@@ -343,7 +343,7 @@ HANDLE object = GlobalAlloc(GMEM_MOVEABLE, (1 + textLen) * sizeof(WCHAR));
 WCHAR*  buffer = (WCHAR*) GlobalLock(object);
 ```
 
-Next you can use [`MultiByteToWideChar`](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar) to convert your string to a wide string.
+Next, you can use [`MultiByteToWideChar`](https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-multibytetowidechar) to convert your string to a wide string.
 
 ```c
 MultiByteToWideChar(CP_UTF8, 0, text, -1, buffer, textLen);
@@ -368,7 +368,7 @@ CloseClipboard();
 ```
 
 ### cocoa
-First create an array of the type of data you want to put on the clipboard, then convert it to a NSArray via [`initWithObjects`](https://developer.apple.com/documentation/foundation/nsarray/1460068-initwithobjects).
+First create an array of the type of data you want to put on the clipboard, then convert it to an NSArray via [`initWithObjects`](https://developer.apple.com/documentation/foundation/nsarray/1460068-initwithobjects).
 
 ```c
 NSPasteboardType ntypes[] = { dataType };
