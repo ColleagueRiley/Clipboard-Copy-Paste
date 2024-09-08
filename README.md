@@ -17,36 +17,44 @@
 
 ### X11
 
-[`XInternAtom`](https://www.x.org/releases/X11R7.5/doc/man/man3/XInternAtom.3.html)
+In order to handle the clipboard you need to create some Atoms via [`XInternAtom`](https://www.x.org/releases/X11R7.5/doc/man/man3/XInternAtom.3.html).
+[X Atoms](https://tronche.com/gui/x/xlib/window-information/properties-and-atoms.html) are used to ask for or send specific data or properties through X11. 
+
+You'll need three atoms, 
+
+1) UTF8_STRING : Atom for a UTF-8 string.
+2) CLIPBOARD : Atom for getting clipboard data.
+3) XSEL_DATA : Atom to get selection data.
 
 ```c
-const Atom UTF8 = XInternAtom(display, "UTF8_STRING", True);
+const Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
 const Atom CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0);
 const Atom XSEL_DATA = XInternAtom(display, "XSEL_DATA", 0);
 ```
 
+Now, to get the clipboard data you have to request that the clipboard section be converted to UTF8 via [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
 
-[`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html)
-[`XSync`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html)
-
+Then use [`XSync`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) to make sure the request is sent to the server. 
 
 ```c
-XConvertSelection(display, CLIPBOARD, UTF8, XSEL_DATA, window, CurrentTime);
+XConvertSelection(display, CLIPBOARD, UTF8_STRING, XSEL_DATA, window, CurrentTime);
 XSync(display, 0);
 ```
 
-[`XNextEvent`](https://tronche.com/gui/x/xlib/event-handling/manipulating-event-queue/XNextEvent.html)
-
-[`XSelectionNotify`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSelectionEvent.3.html)
+The selection will be converted and sent back to the client as a [`XSelectionNotify`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSelectionEvent.3.html) event. You can get the next event, which should be the `SelectionNotify` event via [`XNextEvent`](https://tronche.com/gui/x/xlib/event-handling/manipulating-event-queue/XNextEvent.html).
 
 ```c
 XEvent event;
 XNextEvent(display, &event);
+```
 
+Then make sure the event is a `SelectionNotify` event. Then use `.selection` to make sure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrived.
+
+```c
 if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
 ```
 
-[`XGetWindowProperty`](https://www.x.org/releases/X11R7.5/doc/man/man3/XChangeProperty.3.html)
+Now you can get the convered data via [`XGetWindowProperty`](https://www.x.org/releases/X11R7.5/doc/man/man3/XChangeProperty.3.html) using the selection property. 
 
 ```c
     int format;
@@ -59,12 +67,15 @@ if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && 
 	    &format, &size, &N, (unsigned char**) &data);
 ```
 
+Makke sure the data is the right format by checking `target`
+
 ```c 
-    if (target == UTF8 || target == XA_STRING) {
+    if (target == UTF8_STRING || target == XA_STRING) {
 ```
 
-[`XFree`](https://software.cfht.hawaii.edu/man/x11/XFree(3x))
-[`XDeleteProperty`](https://tronche.com/gui/x/xlib/window-information/XDeleteProperty.html)
+The data is stored in `data`, once you're done with it free it via [`XFree`](https://software.cfht.hawaii.edu/man/x11/XFree(3x)).
+
+Lastly, delete the propety via [`XDeleteProperty`](https://tronche.com/gui/x/xlib/window-information/XDeleteProperty.html).
 
 ```c
         XFree(data);
