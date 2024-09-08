@@ -394,3 +394,303 @@ NSString* nsstr = objc_msgSend_class_char(objc_getClass("NSString"), sel_registe
 
 ((bool (*)(id, SEL, id, NSPasteboardType))objc_msgSend) (pasteboard, sel_registerName("setString:forType:"), nsstr, dataType);	
 ```
+
+## Full examples
+
+### X11
+```c
+// compile with:
+// gcc x11.c -lX11
+
+#include <X11/Xlib.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+#include <X11/Xatom.h>
+
+int main(void) {
+    Display* display = XOpenDisplay(NULL);
+ 
+    Window window = XCreateSimpleWindow(display, RootWindow(display, DefaultScreen(display)), 10, 10, 200, 200, 1,
+                                 BlackPixel(display, DefaultScreen(display)), WhitePixel(display, DefaultScreen(display)));
+ 
+    XSelectInput(display, window, ExposureMask | KeyPressMask); 
+
+	const Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
+	const Atom CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0);
+	const Atom XSEL_DATA = XInternAtom(display, "XSEL_DATA", 0);
+
+	const Atom SAVE_TARGETS = XInternAtom((Display*) display, "SAVE_TARGETS", False);
+	const Atom TARGETS = XInternAtom((Display*) display, "TARGETS", False);
+	const Atom MULTIPLE = XInternAtom((Display*) display, "MULTIPLE", False);
+	const Atom ATOM_PAIR = XInternAtom((Display*) display, "ATOM_PAIR", False);
+	const Atom CLIPBOARD_MANAGER = XInternAtom((Display*) display, "CLIPBOARD_MANAGER", False);
+
+	// input
+	XConvertSelection(display, CLIPBOARD, UTF8_STRING, XSEL_DATA, window, CurrentTime);
+	XSync(display, 0);
+
+	XEvent event;
+	XNextEvent(display, &event);
+
+	if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
+
+		int format;
+		unsigned long N, size;
+		char* data, * s = NULL;
+		Atom target;
+
+		XGetWindowProperty(event.xselection.display, event.xselection.requestor,
+			event.xselection.property, 0L, (~0L), 0, AnyPropertyType, &target,
+			&format, &size, &N, (unsigned char**) &data);
+
+		if (target == UTF8_STRING || target == XA_STRING) {
+			printf("paste: %s\n", data);
+			XFree(data);
+		}
+
+		XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xselection.property);
+	}
+
+	// output
+	char text[] = "new string\0";
+
+	XSetSelectionOwner((Display*) display, CLIPBOARD, (Window) window, CurrentTime);
+
+	XConvertSelection((Display*) display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, (Window) window, CurrentTime);
+		
+	Bool running = True;
+	while (running) {
+		XNextEvent(display, &event);
+		if (event.type == SelectionRequest) {
+			const XSelectionRequestEvent* request = &event.xselectionrequest;
+
+			XEvent reply = { SelectionNotify };
+			reply.xselection.property = 0;
+
+			if (request->target == TARGETS) {
+				const Atom targets[] = { TARGETS,
+										MULTIPLE,
+										UTF8_STRING,
+										XA_STRING };
+
+				XChangeProperty(display,
+					request->requestor,
+					request->property,
+					4,
+					32,
+					PropModeReplace,
+					(unsigned char*) targets,
+					sizeof(targets) / sizeof(targets[0]));
+
+				reply.xselection.property = request->property;
+			}
+
+			if (request->target == MULTIPLE) {	
+				Atom* targets = NULL;
+
+				Atom actualType = 0;
+				int actualFormat = 0;
+				unsigned long count = 0, bytesAfter = 0;
+
+				XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char **) &targets);
+
+				unsigned long i;
+				for (i = 0; i < count; i += 2) {
+					Bool found = False; 
+
+					if (targets[i] == UTF8_STRING || targets[i] == XA_STRING) {
+						XChangeProperty((Display*) display,
+							request->requestor,
+							targets[i + 1],
+							targets[i],
+							8,
+							PropModeReplace,
+							(unsigned char*) text,
+							sizeof(text));
+						XFlush(display);
+						running = False;
+					} else {
+						targets[i + 1] = None;
+					}
+				}
+
+				XChangeProperty((Display*) display,
+					request->requestor,
+					request->property,
+					ATOM_PAIR,
+					32,
+					PropModeReplace,
+					(unsigned char*) targets,
+					count);
+
+				XFlush(display);
+				XFree(targets);
+
+				reply.xselection.property = request->property;
+			}
+
+			reply.xselection.display = request->display;
+			reply.xselection.requestor = request->requestor;
+			reply.xselection.selection = request->selection;
+			reply.xselection.target = request->target;
+			reply.xselection.time = request->time;
+
+			XSendEvent((Display*) display, request->requestor, False, 0, &reply);
+			XFlush(display);
+		}
+	}
+
+    XCloseDisplay(display);
+ }
+```
+
+### Winapi
+```c
+// compile with:
+// gcc win32.c
+
+#include <windows.h>
+#include <locale.h>
+
+#include <stdio.h>
+
+int main() {
+	// output
+	if (OpenClipboard(NULL) == 0)
+		return 0;
+
+	HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+	if (hData == NULL) {
+		CloseClipboard();
+		return 0;
+	}
+
+	wchar_t* wstr = (wchar_t*) GlobalLock(hData);
+
+	setlocale(LC_ALL, "en_US.UTF-8");
+
+	size_t textLen = wcstombs(NULL, wstr, 0);
+
+	if (textLen) {
+		char* text = (char*) malloc((textLen * sizeof(char)) + 1);
+
+		wcstombs(text, wstr, (textLen) + 1);
+		text[textLen] = '\0';
+		
+		printf("paste: %s\n", text);
+		free(text);
+	}
+
+	GlobalUnlock(hData);
+	CloseClipboard();
+
+
+	// input
+		
+	char text[] = "new text\0";
+
+	HANDLE object = GlobalAlloc(GMEM_MOVEABLE, (sizeof(text) / sizeof(char))  * sizeof(WCHAR));
+
+	WCHAR* buffer = (WCHAR*) GlobalLock(object);
+	if (!buffer) {
+		GlobalFree(object);
+		return 0;
+	}
+
+	MultiByteToWideChar(CP_UTF8, 0, text, -1, buffer, (sizeof(text) / sizeof(char)));
+	
+	GlobalUnlock(object);
+	if (OpenClipboard(NULL) == 0) {
+		GlobalFree(object);
+		return 0;
+	}
+
+	EmptyClipboard();
+	SetClipboardData(CF_UNICODETEXT, object);
+	CloseClipboard();
+}
+```
+
+### Cocoa
+```c
+// compile with:
+// gcc cocoa.c -framework Foundation -framework AppKit  
+
+
+#include <objc/runtime.h>
+#include <objc/message.h>
+#include <CoreVideo/CVDisplayLink.h>
+#include <ApplicationServices/ApplicationServices.h>
+
+#ifdef __arm64__
+/* ARM just uses objc_msgSend */
+#define abi_objc_msgSend_stret objc_msgSend
+#define abi_objc_msgSend_fpret objc_msgSend
+#else /* __i386__ */
+/* x86 just uses abi_objc_msgSend_fpret and (NSColor *)objc_msgSend_id respectively */
+#define abi_objc_msgSend_stret objc_msgSend_stret
+#define abi_objc_msgSend_fpret objc_msgSend_fpret
+#endif
+
+typedef void NSPasteboard;
+typedef void NSString;
+typedef void NSArray;
+typedef void NSApplication;
+
+typedef const char* NSPasteboardType;
+
+typedef unsigned long NSUInteger;
+typedef long NSInteger;
+
+#define NSAlloc(nsclass) objc_msgSend_id((id)nsclass, sel_registerName("alloc"))
+
+#define objc_msgSend_bool			((BOOL (*)(id, SEL))objc_msgSend)
+#define objc_msgSend_void			((void (*)(id, SEL))objc_msgSend)
+#define objc_msgSend_void_id		((void (*)(id, SEL, id))objc_msgSend)
+#define objc_msgSend_uint			((NSUInteger (*)(id, SEL))objc_msgSend)
+#define objc_msgSend_void_bool		((void (*)(id, SEL, BOOL))objc_msgSend)
+#define objc_msgSend_void_int		((void (*)(id, SEL, int))objc_msgSend)
+#define objc_msgSend_bool_void		((BOOL (*)(id, SEL))objc_msgSend)
+#define objc_msgSend_void_SEL		((void (*)(id, SEL, SEL))objc_msgSend)
+#define objc_msgSend_id				((id (*)(id, SEL))objc_msgSend)
+#define objc_msgSend_id_id				((id (*)(id, SEL, id))objc_msgSend)
+#define objc_msgSend_id_bool			((BOOL (*)(id, SEL, id))objc_msgSend)
+
+#define objc_msgSend_class_char ((id (*)(Class, SEL, char*))objc_msgSend)
+
+void NSRelease(id obj) {
+	objc_msgSend_void(obj, sel_registerName("release"));
+}
+
+int main() {
+	/* input */
+	NSPasteboardType const NSPasteboardTypeString = "public.utf8-plain-text";
+
+	NSString* dataType = objc_msgSend_class_char(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), (char*)NSPasteboardTypeString);
+
+	NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard")); 
+	
+	NSString* clip = ((id(*)(id, SEL, const char*))objc_msgSend)(pasteboard, sel_registerName("stringForType:"), dataType);
+	
+	const char* str = ((const char* (*)(id, SEL)) objc_msgSend) (clip, sel_registerName("UTF8String"));
+
+	printf("paste: %s\n", str);
+	
+	char text[] = "new string\0";
+
+	NSPasteboardType ntypes[] = { dataType };
+
+	NSArray* array = ((id (*)(id, SEL, void*, NSUInteger))objc_msgSend)
+						(NSAlloc(objc_getClass("NSArray")), sel_registerName("initWithObjects:count:"), ntypes, 1);
+
+	((NSInteger(*)(id, SEL, id, void*))objc_msgSend) (pasteboard, sel_registerName("declareTypes:owner:"), array, NULL);
+	NSRelease(array);
+	
+	NSString* nsstr = objc_msgSend_class_char(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), text);
+
+	((bool (*)(id, SEL, id, NSPasteboardType))objc_msgSend) (pasteboard, sel_registerName("setString:forType:"), nsstr, dataType);	
+}
+```
