@@ -4,6 +4,8 @@ Reading and writing to the clipboard using low-level APIs can be tricky. There a
 
 The tutorial is based on RGFW's source code and its usage of the low-level APIs.
 
+Note: the cocoa code is written in Pure-C. 
+
 ## Overview
 
 1) Clipboard Paste 
