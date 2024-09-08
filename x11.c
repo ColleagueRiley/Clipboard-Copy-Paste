@@ -88,8 +88,6 @@ int main(void) {
 			}
 
 			if (request->target == MULTIPLE) {	
-				const Atom formats[] = { UTF8_STRING, XA_STRING };
-
 				Atom* targets = NULL;
 
 				Atom actualType = 0;
@@ -98,18 +96,11 @@ int main(void) {
 
 				XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char **) &targets);
 
-				unsigned long i, j;
+				unsigned long i;
 				for (i = 0; i < count; i += 2) {
 					Bool found = False; 
 
-					for (j = 0; j < 2; j++) {
-						if (targets[i] == formats[j]) {
-							found = True;
-							break;
-						}
-					}
-
-					if (j < 2 && found) {
+					if (targets[i] == UTF8_STRING || targets[i] == XA_STRING) {
 						XChangeProperty((Display*) display,
 							request->requestor,
 							targets[i + 1],
