@@ -87,19 +87,16 @@ Lastly, delete the propety via [`XDeleteProperty`](https://tronche.com/gui/x/xli
 
 ### winapi
 
-[`OpenClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openclipboard)
+First, open the clipboard [`OpenClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openclipboard). 
 
-Open the clipboard
 ```c
 if (OpenClipboard(NULL) == 0)
 	return 0;
 ```
 
-Get the clipboard data as a Unicode string
+Get the clipboard data as a Unicode string via [`GetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboarddata)
 
-[`GetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboarddata)
-
-[`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard)
+If the data is NULL, you should close the clipboard via [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard)
 
 ```c
 HANDLE hData = GetClipboardData(CF_UNICODETEXT);
@@ -109,17 +106,17 @@ if (hData == NULL) {
 }
 ```
 
-[`GlobalLock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock)
+Next you need to convert the unicode data back to utf-8.  
+
+Start by locking memory for the utf-8 data via [`GlobalLock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock).
 
 ```
 wchar_t* wstr = (wchar_t*) GlobalLock(hData);
 ```
 
-Get the size of the UTF-8 version
+Use [`setlocale`](https://en.cppreference.com/w/c/locale/setlocale) to ensure the data format is utf-8.
 
-[`setlocale`](https://en.cppreference.com/w/c/locale/setlocale)
-
-[`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170)
+Get the size of the UTF-8 version via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
 
 ```C
 setlocale(LC_ALL, "en_US.UTF-8");
@@ -127,7 +124,7 @@ setlocale(LC_ALL, "en_US.UTF-8");
 size_t textLen = wcstombs(NULL, wstr, 0);
 ```
 
-convert to the utf-8 version
+If the size is valid, conver tthe data via [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
 
 ```c
 if (textLen) {
@@ -140,9 +137,7 @@ if (textLen) {
 }
 ```
 
-free leftover data
-
-[`GlobalUnlock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalunlock)
+Then free leftover global data using   [`GlobalUnlock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalunlock) and close the clipboard with [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard).
 
 ```c
 GlobalUnlock(hData);
@@ -150,24 +145,27 @@ CloseClipboard();
 ```
 
 ### cocoa
-
-[`NSPasteboardTypeString`](https://developer.apple.com/documentation/appkit/nspasteboardtypestring)
-
-[`stringWithUTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1497379-stringwithutf8string)
+Cocoa uses [`NSPasteboardTypeString`](https://developer.apple.com/documentation/appkit/nspasteboardtypestring) for asking for a string data. You'll have to define this yourself if you're using Objective-C.
 
 ```c
 NSPasteboardType const NSPasteboardTypeString = "public.utf8-plain-text";
+```
+
+Although the is a c-string and Cocoa uses NSStrings, you can convert the c-string to an NSString via [`stringWithUTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1497379-stringwithutf8string).
+
+```c
 NSString* dataType = objc_msgSend_class_char(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), (char*)NSPasteboardTypeString);
 ```
 
-[`generalPasteboard`](https://developer.apple.com/documentation/uikit/uipasteboard/1622106-generalpasteboard)
+Now we'll use [`generalPasteboard`](https://developer.apple.com/documentation/uikit/uipasteboard/1622106-generalpasteboard) to get the default pasteboard object. 
 
 ```c
 NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard")); 
 ```
 
-[`stringForType`](https://developer.apple.com/documentation/appkit/nspasteboard/1533566-stringfortype)
-[`UTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1411189-utf8string)
+Then you can get the pasteboard's string data using `dataType` via [`stringForType`](https://developer.apple.com/documentation/appkit/nspasteboard/1533566-stringfortype).
+
+However it will give you an NSString, which can be convereted via [`UTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1411189-utf8string).
 
 ```c
 NSString* clip = ((id(*)(id, SEL, const char*))objc_msgSend)(pasteboard, sel_registerName("stringForType:"), dataType);
