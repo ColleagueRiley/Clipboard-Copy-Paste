@@ -151,7 +151,7 @@ CloseClipboard();
 ```
 
 ### cocoa
-Cocoa uses [`NSPasteboardTypeString`](https://developer.apple.com/documentation/appkit/nspasteboardtypestring) for asking for a string data. You'll have to define this yourself if you're not using Objective-C.
+Cocoa uses [`NSPasteboardTypeString`](https://developer.apple.com/documentation/appkit/nspasteboardtypestring) to ask for string data. You'll have to define this yourself if you're not using Objective-C.
 
 ```c
 NSPasteboardType const NSPasteboardTypeString = "public.utf8-plain-text";
