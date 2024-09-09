@@ -100,7 +100,7 @@ if (OpenClipboard(NULL) == 0)
 	return 0;
 ```
 
-Get the clipboard data as a Unicode string via [`GetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboarddata)
+Get the clipboard data as a utf16 string via [`GetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboarddata)
 
 If the data is NULL, you should close the clipboard using [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard)
 
@@ -112,7 +112,7 @@ if (hData == NULL) {
 }
 ```
 
-Next, you need to convert the Unicode data back to utf8.  
+Next, you need to convert the utf16 data back to utf8.  
 
 Start by locking memory for the utf8 data via [`GlobalLock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock).
 
@@ -184,11 +184,11 @@ const char* str = ((const char* (*)(id, SEL)) objc_msgSend) (clip, sel_registerN
 
 To copy to the clipboard you'll need a few more Atoms. 
 
-1) SAVE_TARGETS: to request a section to convert to (for copying). 
+1) SAVE_TARGETS: To request a section to convert to (for copying). 
 2) TARGETS: To handle one requested target
 3) MULTIPLE: When there are multiple request targets
-4) ATOM_PAIR: to get the supported data types.
-5) CLIPBOARD_MANAGER: to access data from the clipboard manager.
+4) ATOM_PAIR: To get the supported data types.
+5) CLIPBOARD_MANAGER: To access data from the clipboard manager.
 
 
 ```c
