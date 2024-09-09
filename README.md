@@ -210,7 +210,7 @@ XConvertSelection((Display*) display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, (Wi
 
 The rest of the code would exist in an event loop. You can create an external event loop from your main event loop if you wish or add this to your main event loop.
 
-We'll be handling [`SelectionRequest`](https://tronche.com/gui/x/xlib/events/client-communication/selection-request.html) in order to update the clipboard selection to data to hold the string data.
+We'll be handling [`SelectionRequest`](https://tronche.com/gui/x/xlib/events/client-communication/selection-request.html) in order to update the clipboard selection to the string data.
 
 ```c
 if (event.type == SelectionRequest) {
