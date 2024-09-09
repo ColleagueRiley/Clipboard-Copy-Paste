@@ -54,7 +54,7 @@ XEvent event;
 XNextEvent(display, &event);
 ```
 
- make sure the event is a `SelectionNotify` event.  use `.selection` to ensure the type is a `CLIPBOARD`. Finally, make sure `.property` is not 0 and can be retrieved.
+ Check if the event is a `SelectionNotify` event and use `.selection` to ensure the type is a `CLIPBOARD`. Also make sure `.property` is not 0 and can be retrieved.
 
 ```c
 if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
