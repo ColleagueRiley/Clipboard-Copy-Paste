@@ -23,7 +23,9 @@ Note: the cocoa code is written in Pure-C.
 
 ### X11
 
-You'll need to initialize a few Atoms:
+You'll need to initialize a few Atoms via [`XInternAtom`](https://www.x.org/releases/X11R7.5/doc/man/man3/XInternAtom.3.html).
+[X Atoms](https://tronche.com/gui/x/xlib/window-information/properties-and-atoms.html) are used to ask for or send specific data or properties through X11. 
+
 
 These should be initialized in your main function and declared globally 
 
@@ -32,15 +34,15 @@ Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
 Atom SAVE_TARGETS = XInternAtom(display, "SAVE_TARGETS", False);
 ``````
 
-Declare a handler function for SelectionRequest events:
+Declare a handler function for SelectionRequest events. This will be defined later.
 
 ```c
 int XHandleClipboardSelection(Display* display, XEvent* event, char* clipboard, size_t clipboard_len);
 ```
 
-This function will handle selection targets like TARGETS, MULTIPLE, and default ones like UTF8_STRING or XA_STRING.
+This function will handle selection targets like TARGETS, MULTIPLE, and default ones like UTF8_STRING or XA_STRING. It's needed because it will be used to write to the clipboard and to save the clipboard before the program ends. 
 
-After setting up the handler, set your window as the selection owner and inform the clipboard manager to save it:
+After setting up the handler, set your window as the selection owner.
 
 ```c
 XSetSelectionOwner(display, CLIPBOARD, window, CurrentTime);
@@ -48,11 +50,9 @@ if (XGetSelectionOwner(display, CLIPBOARD) != window) {
     printf("X11 failed to become owner of clipboard selection");
     return -1;
 }
-
-XConvertSelection(display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, window, CurrentTime);
 ```
 
-Your main loop should now listen for SelectionRequest events and handle them via your handler function:
+Your main loop should now listen for SelectionRequest events and handle them via the handler function:
 
 ```c
 while (1) {
@@ -64,7 +64,9 @@ while (1) {
 }
 ```
 
-After breaking from the loop, ensure the clipboard manager has saved the selection:
+After , ensure the clipboard manager has saved the selection before the program ends.
+
+This is done by checking if we own the current clipboard selection, then requesting to save the selection to the clipboard manager with `SAVE_TARGETS`.
 
 ```c
 if (XGetSelectionOwner(display, CLIPBOARD) == window) {
@@ -77,15 +79,142 @@ if (XGetSelectionOwner(display, CLIPBOARD) == window) {
         if (event.type == SelectionRequest)
             XHandleClipboardSelection(display, &event, text, sizeof(text));
         else if (event.type == SelectionNotify && event.xselection.target == SAVE_TARGETS)
-            ; // handled
+            ; // this is an error, this means we're getting the event back which implies problems with the clipboard manager
     }
 }
 ```
 
 This ensures reliable clipboard behavior, even after your app exits.
 
-To handle the clipboard, you must create some Atoms via [`XInternAtom`](https://www.x.org/releases/X11R7.5/doc/man/man3/XInternAtom.3.html).
-[X Atoms](https://tronche.com/gui/x/xlib/window-information/properties-and-atoms.html) are used to ask for or send specific data or properties through X11. 
+### `XHandleClipboardSelection` Function
+
+This function handles X11 `SelectionRequest` events, responding with supported clipboard formats and data. It's a critical part of setting clipboard content on X11.
+
+```c
+int XHandleClipboardSelection(Display* display, XEvent* event, char* clipboard, size_t clipboard_len) {
+```
+Note: I have a return variable in order to tell the main loop that the clipboard has been written to.
+```
+int ret = 0; // 0 by default, meaning the clipboard was not written to
+```
+
+
+Before responding to the request, define the atoms used for identifying supported targets.
+
+```c
+const Atom TARGETS = XInternAtom(display, "TARGETS", False);
+const Atom MULTIPLE = XInternAtom(display, "MULTIPLE", False);
+const Atom ATOM_PAIR = XInternAtom(display, "ATOM_PAIR", False);
+const Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", False);
+```
+
+Set Up Response Event
+
+Prepare the `SelectionNotify` event. This structure will be populated based on the request type and sent back to the requestor.
+
+```c
+const XSelectionRequestEvent* request = &event->xselectionrequest;
+
+XEvent reply = { .xselection = {
+    .type = SelectionNotify,
+    .display = request->display,
+    .requestor = request->requestor,
+    .selection = request->selection,
+    .target = request->target,
+    .property = request->property,
+    .time = request->time
+}};
+```
+
+Handle `TARGETS` Request
+
+If the requestor wants to know which formats are supported, respond with an array of atoms representing the supported formats.
+
+```c
+if (request->target == TARGETS) {
+    const Atom targets[] = { TARGETS, MULTIPLE, UTF8_STRING, XA_STRING };
+
+    XChangeProperty(display, request->requestor, request->property,
+                    XA_ATOM, 32, PropModeReplace,
+                    (unsigned char*)targets, sizeof(targets) / sizeof(Atom));
+}
+```
+
+Handle `MULTIPLE` Request
+
+If multiple formats are requested (as an atom pair list), process them in pairs and respond accordingly.
+
+```c
+else if (request->target == MULTIPLE) {
+    Atom* targets = NULL;
+    Atom actualType;
+    int actualFormat;
+    unsigned long count, bytesAfter;
+
+    XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX,
+                       False, ATOM_PAIR, &actualType, &actualFormat,
+                       &count, &bytesAfter, (unsigned char**)&targets);
+
+    for (unsigned long i = 0; i < count; i += 2) {
+        if (targets[i] == UTF8_STRING || targets[i] == XA_STRING) {
+            XChangeProperty(display, request->requestor, targets[i + 1], targets[i],
+                            8, PropModeReplace,
+                            (unsigned char*)clipboard, clipboard_len);
+            
+            ret = 1;
+        } else {
+            targets[i + 1] = None;
+        }
+    }
+
+    XChangeProperty(display, request->requestor, request->property,
+                    ATOM_PAIR, 32, PropModeReplace,
+                    (unsigned char*)targets, count);
+
+    XFree(targets);
+    XFlush(display);
+}
+
+```
+
+Handle `SAVE_TARGETS`
+
+```c
+else if (request->target == XInternAtom(display, "SAVE_TARGETS", False)) {
+    XChangeProperty(display, request->requestor, request->property,
+                    None, 32, PropModeReplace, NULL, 0);
+}
+```
+
+Handle Direct Format Request (UTF8_STRING, XA_STRING)
+
+Respond directly to a simple request for a single format.
+
+```c
+else if (request->target == UTF8_STRING || request->target == XA_STRING) {
+    XChangeProperty(display, request->requestor, request->property,
+                    request->target, 8, PropModeReplace,
+                    (unsigned char*)clipboard, clipboard_len);
+    ret = 1;
+}
+```
+
+Send the Reply
+
+Once handling is complete, send the SelectionNotify reply event back to the requestor.
+
+```c
+XEvent reply = { SelectionNotify };
+reply.xselection.property = request->property;
+reply.xselection.display = request->display;
+reply.xselection.requestor = request->requestor;
+reply.xselection.selection = request->selection;
+reply.xselection.target = request->target;
+reply.xselection.time = request->time;
+ 
+XSendEvent(display, request->requestor, False, 0, &reply);
+return ret;
+```
 
 ### winapi
 First allocate global memory for your data and your utf-8 buffer with [`GlobalAlloc`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalalloc)
