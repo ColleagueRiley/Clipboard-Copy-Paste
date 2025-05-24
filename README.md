@@ -23,319 +23,69 @@ Note: the cocoa code is written in Pure-C.
 
 ### X11
 
+You'll need to initialize a few Atoms:
+
+These should be initialized in your main function and declared globally 
+
+```c
+Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
+Atom SAVE_TARGETS = XInternAtom(display, "SAVE_TARGETS", False);
+``````
+
+Declare a handler function for SelectionRequest events:
+
+```c
+int XHandleClipboardSelection(Display* display, XEvent* event, char* clipboard, size_t clipboard_len);
+```
+
+This function will handle selection targets like TARGETS, MULTIPLE, and default ones like UTF8_STRING or XA_STRING.
+
+After setting up the handler, set your window as the selection owner and inform the clipboard manager to save it:
+
+```c
+XSetSelectionOwner(display, CLIPBOARD, window, CurrentTime);
+if (XGetSelectionOwner(display, CLIPBOARD) != window) {
+    printf("X11 failed to become owner of clipboard selection");
+    return -1;
+}
+
+XConvertSelection(display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, window, CurrentTime);
+```
+
+Your main loop should now listen for SelectionRequest events and handle them via your handler function:
+
+```c
+while (1) {
+    XEvent event;
+    XNextEvent(display, &event);
+    if (event.type == SelectionRequest &&
+        XHandleClipboardSelection(display, &event, text, sizeof(text)))
+            break; // breaks out of the main loop
+}
+```
+
+After breaking from the loop, ensure the clipboard manager has saved the selection:
+
+```c
+if (XGetSelectionOwner(display, CLIPBOARD) == window) {
+    XConvertSelection(display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, window, CurrentTime);
+
+    if (QLength(display) || XEventsQueued(display, QueuedAlready) + XEventsQueued(display, QueuedAfterReading)) {
+        XEvent event;
+        XNextEvent(display, &event);
+
+        if (event.type == SelectionRequest)
+            XHandleClipboardSelection(display, &event, text, sizeof(text));
+        else if (event.type == SelectionNotify && event.xselection.target == SAVE_TARGETS)
+            ; // handled
+    }
+}
+```
+
+This ensures reliable clipboard behavior, even after your app exits.
+
 To handle the clipboard, you must create some Atoms via [`XInternAtom`](https://www.x.org/releases/X11R7.5/doc/man/man3/XInternAtom.3.html).
 [X Atoms](https://tronche.com/gui/x/xlib/window-information/properties-and-atoms.html) are used to ask for or send specific data or properties through X11. 
-
-You'll need three atoms, 
-
-1) UTF8_STRING: Atom for a UTF-8 string.
-2) CLIPBOARD: Atom for getting clipboard data.
-3) XSEL_DATA: Atom to get selection data.
-
-```c
-const Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
-const Atom CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0);
-const Atom XSEL_DATA = XInternAtom(display, "XSEL_DATA", 0);
-```
-
-Now, to get the clipboard data you have to request that the clipboard section be converted to UTF8 using [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
-
- use [`XSync`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) to send the request to the server. 
-
-```c
-XConvertSelection(display, CLIPBOARD, UTF8_STRING, XSEL_DATA, window, CurrentTime);
-XSync(display, 0);
-```
-
-The selection will be converted and sent back to the client as a [`XSelectionNotify`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSelectionEvent.3.html) event. You can get the next event, which should be the `SelectionNotify` event with [`XNextEvent`](https://tronche.com/gui/x/xlib/event-handling/manipulating-event-queue/XNextEvent.html).
-
-```c
-XEvent event;
-XNextEvent(display, &event);
-```
-
- Check if the event is a `SelectionNotify` event and use `.selection` to ensure the type is a `CLIPBOARD`. Also make sure `.property` is not 0 and can be retrieved.
-
-```c
-if (event.type == SelectionNotify && event.xselection.selection == CLIPBOARD && event.xselection.property != 0) {
-```
-
-You can get the converted data via [`XGetWindowProperty`](https://www.x.org/releases/X11R7.5/doc/man/man3/XChangeProperty.3.html) using the selection property. 
-
-```c
-    int format;
-    unsigned long N, size;
-    char* data, * s = NULL;
-    Atom target;
-
-    XGetWindowProperty(event.xselection.display, event.xselection.requestor,
-	    event.xselection.property, 0L, (~0L), 0, AnyPropertyType, &target,
-	    &format, &size, &N, (unsigned char**) &data);
-```
-
-Make sure the data is in the right format by checking `target`
-
-```c 
-    if (target == UTF8_STRING || target == XA_STRING) {
-```
-
-The data is stored in `data`, once you're done with it free it with [`XFree`](https://software.cfht.hawaii.edu/man/x11/XFree(3x)).
-
-You can also delete the property via [`XDeleteProperty`](https://tronche.com/gui/x/xlib/window-information/XDeleteProperty.html).
-
-```c
-        XFree(data);
-    }
-
-    XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xselection.property);
-}
-```
-
-### winapi
-
-First, open the clipboard [`OpenClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-openclipboard). 
-
-```c
-if (OpenClipboard(NULL) == 0)
-	return 0;
-```
-
-Get the clipboard data as a utf16 string via [`GetClipboardData`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclipboarddata)
-
-If the data is NULL, you should close the clipboard using [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard)
-
-```c
-HANDLE hData = GetClipboardData(CF_UNICODETEXT);
-if (hData == NULL) {
-	CloseClipboard();
-	return 0;
-}
-```
-
-Next, you need to convert the utf16 data back to utf8.  
-
-Start by locking memory for the utf8 data via [`GlobalLock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globallock).
-
-```
-wchar_t* wstr = (wchar_t*) GlobalLock(hData);
-```
-
-Use [`setlocale`](https://en.cppreference.com/w/c/locale/setlocale) to ensure the data format is utf8.
-
-Get the size of the UTF-8 version with [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
-
-```C
-setlocale(LC_ALL, "en_US.UTF-8");
-
-size_t textLen = wcstombs(NULL, wstr, 0);
-```
-
-If the size is valid, convert the data using [`wcstombs`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/wcstombs-wcstombs-l?view=msvc-170).
-
-```c
-if (textLen) {
-	char* text = (char*) malloc((textLen * sizeof(char)) + 1);
-
-	wcstombs(text, wstr, (textLen) + 1);
-	text[textLen] = '\0';
-
-    free(text);
-}
-```
-
-Make sure to free leftover global data using [`GlobalUnlock`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalunlock) and close the clipboard with [`CloseClipboard`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-closeclipboard).
-
-```c
-GlobalUnlock(hData);
-CloseClipboard();
-```
-
-### cocoa
-Cocoa uses [`NSPasteboardTypeString`](https://developer.apple.com/documentation/appkit/nspasteboardtypestring) to ask for string data. You'll have to define this yourself if you're not using Objective-C.
-
-```c
-NSPasteboardType const NSPasteboardTypeString = "public.utf8-plain-text";
-```
-
-Although the is a c-string and Cocoa uses NSStrings, you can convert the c-string to an NSString via [`stringWithUTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1497379-stringwithutf8string).
-
-```c
-NSString* dataType = objc_msgSend_class_char(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), (char*)NSPasteboardTypeString);
-```
-
-Now we'll use [`generalPasteboard`](https://developer.apple.com/documentation/uikit/uipasteboard/1622106-generalpasteboard) to get the default pasteboard object. 
-
-```c
-NSPasteboard* pasteboard = objc_msgSend_id((id)objc_getClass("NSPasteboard"), sel_registerName("generalPasteboard")); 
-```
-
-Then you can get the pasteboard's string data with the `dataType` using [`stringForType`](https://developer.apple.com/documentation/appkit/nspasteboard/1533566-stringfortype).
-
-However, it will give you an NSString, which can be converted with [`UTF8String`](https://developer.apple.com/documentation/foundation/nsstring/1411189-utf8string).
-
-```c
-NSString* clip = ((id(*)(id, SEL, const char*))objc_msgSend)(pasteboard, sel_registerName("stringForType:"), dataType);
-const char* str = ((const char* (*)(id, SEL)) objc_msgSend) (clip, sel_registerName("UTF8String"));
-```
-
-## Clipboard Copy
-
-### X11
-
-To copy to the clipboard you'll need a few more Atoms. 
-
-1) SAVE_TARGETS: To request a section to convert to (for copying). 
-2) TARGETS: To handle one requested target
-3) MULTIPLE: When there are multiple request targets
-4) ATOM_PAIR: To get the supported data types.
-5) CLIPBOARD_MANAGER: To access data from the clipboard manager.
-
-
-```c
-const Atom SAVE_TARGETS = XInternAtom((Display*) display, "SAVE_TARGETS", False);
-const Atom TARGETS = XInternAtom((Display*) display, "TARGETS", False);
-const Atom MULTIPLE = XInternAtom((Display*) display, "MULTIPLE", False);
-const Atom ATOM_PAIR = XInternAtom((Display*) display, "ATOM_PAIR", False);
-const Atom CLIPBOARD_MANAGER = XInternAtom((Display*) display, "CLIPBOARD_MANAGER", False);
-```
-
-We can request a clipboard section. First, set the owner of the section to be a client window via [`XSetSelectionOwner`](https://tronche.com/gui/x/xlib/window-information/XSetSelectionOwner.html). Next request a converted section using [`XConvertSelection`](https://tronche.com/gui/x/xlib/window-information/XConvertSelection.html).
- 
-
-```c
-XSetSelectionOwner((Display*) display, CLIPBOARD, (Window) window, CurrentTime);
-
-XConvertSelection((Display*) display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, (Window) window, CurrentTime);
-```
-
-The rest of the code would exist in an event loop. You can create an external event loop from your main event loop if you wish or add this to your main event loop.
-
-We'll be handling [`SelectionRequest`](https://tronche.com/gui/x/xlib/events/client-communication/selection-request.html) in order to update the clipboard selection to the string data.
-
-```c
-if (event.type == SelectionRequest) {
-    const XSelectionRequestEvent* request = &event.xselectionrequest;
-```
-
-At the end of the SelectionNotify event, a response will be sent back to the requester. The structure should be created here and modified depending on the request data. 
-
-```c
-	XEvent reply = { SelectionNotify };
-	reply.xselection.property = 0;
-```
-
-The first target we will handle is `TARGETS` when the requestor wants to know which targets are supported.
-
-```c
-	if (request->target == TARGETS) {
-```
-
-I will create an array of supported targets
-
-```c
-        const Atom targets[] = { TARGETS,
-								MULTIPLE,
-								UTF8_STRING,
-								XA_STRING };
-```
-
-This array can be passed using [`XChangeProperty`](https://tronche.com/gui/x/xlib/window-information/XChangeProperty.html).
-
-I'll also change the selection property so the requestor knows what property we changed.
-
-```c
-		XChangeProperty(display,
-			request->requestor,
-			request->property,
-			4,
-			32,
-			PropModeReplace,
-			(unsigned char*) targets,
-			sizeof(targets) / sizeof(targets[0]));
-
-		reply.xselection.property = request->property;
-	}
-```
-
-Next, I will handle `MULTIPLE` targets.
-
-```c
-	if (request->target == MULTIPLE) {
-```
-
-We'll start by getting the supported targets via `XGetWindowProperty`
-
-```c
-		Atom* targets = NULL;
-
-		Atom actualType = 0;
-		int actualFormat = 0;
-		unsigned long count = 0, bytesAfter = 0;
-
-		XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char **) &targets);
-```
-
-Now we'll loop through the supported targets. If the supported targets match one of our supported targets, we can pass the data with `XChangeProperty`.
-
-If the target is not used, the second argument should be set to None, marking it as unused.
-
-```c
-		unsigned long i;
-		for (i = 0; i < count; i += 2) {
-			if (targets[i] == UTF8_STRING || targets[i] == XA_STRING) {
-				XChangeProperty((Display*) display,
-					request->requestor,
-					targets[i + 1],
-					targets[i],
-					8,
-					PropModeReplace,
-					(unsigned char*) text,
-					sizeof(text));
-				XFlush(display);
-			} else {
-				targets[i + 1] = None;
-			}
-		}
-```
-
-You can pass the final array of supported targets to the requestor using `XChangeProperty`. This tells the requestor which targets to expect for the original list it sent. 
-
-The message will be sent out asap when [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html) is called. 
-
-You can free your copy of the target array with `XFree`.
-
-```c
-		XChangeProperty((Display*) display,
-			request->requestor,
-			request->property,
-			ATOM_PAIR,
-			32,
-			PropModeReplace,
-			(unsigned char*) targets,
-			count);
-
-		XFlush(display);
-		XFree(targets);
-
-		reply.xselection.property = request->property;
-	}
-```
-
-For the final step of the event, send the selection back to the requestor via [`XSendEvent`](https://tronche.com/gui/x/xlib/event-handling/XSendEvent.html).
-
-Then flush the queue with [`XFlush`](https://www.x.org/releases/X11R7.5/doc/man/man3/XSync.3.html).
-
-```c
-	reply.xselection.display = request->display;
-	reply.xselection.requestor = request->requestor;
-	reply.xselection.selection = request->selection;
-	reply.xselection.target = request->target;
-	reply.xselection.time = request->time;
-
-	XSendEvent((Display*) display, request->requestor, False, 0, &reply);
-	XFlush(display);
-}
-```
 
 ### winapi
 First allocate global memory for your data and your utf-8 buffer with [`GlobalAlloc`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-globalalloc)
@@ -412,6 +162,77 @@ NSString* nsstr = objc_msgSend_class_char(objc_getClass("NSString"), sel_registe
 
 #include <X11/Xatom.h>
 
+Atom UTF8_STRING, SAVE_TARGETS;
+
+int XHandleClipboardSelection(Display* display, XEvent* event, char* clipboard, size_t clipboard_len) {
+    int ret = 0;
+
+    const Atom TARGETS = XInternAtom((Display*) display, "TARGETS", False);
+	const Atom MULTIPLE = XInternAtom((Display*) display, "MULTIPLE", False);
+	const Atom ATOM_PAIR = XInternAtom((Display*) display, "ATOM_PAIR", False);
+
+    const XSelectionRequestEvent* request = &event->xselectionrequest;
+    const Atom formats[] = { UTF8_STRING, XA_STRING };
+    const int formatCount = sizeof(formats) / sizeof(formats[0]);
+
+    if (request->target == TARGETS) {
+        const Atom targets[] = { TARGETS, MULTIPLE, UTF8_STRING, XA_STRING };
+
+        XChangeProperty(display, request->requestor, request->property,
+                        XA_ATOM, 32, PropModeReplace, (unsigned char*)targets, sizeof(targets) / sizeof(Atom));
+    }  else if (request->target == MULTIPLE) {
+		Atom* targets = NULL;
+
+		Atom actualType = 0;
+		int actualFormat = 0;
+		unsigned long count = 0, bytesAfter = 0;
+
+		XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX,
+							False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char**) &targets);
+
+		unsigned long i;
+		for (i = 0; i < (unsigned int)count; i += 2) {
+			if (targets[i] == UTF8_STRING || targets[i] == XA_STRING) {
+				XChangeProperty(display, request->requestor, targets[i + 1], targets[i],
+					8, PropModeReplace, (const unsigned char *)clipboard, clipboard_len);
+                ret = 1;    
+            }
+			else
+				targets[i + 1] = None;
+		}
+
+		XChangeProperty(display,
+			request->requestor, request->property, ATOM_PAIR, 32,
+			PropModeReplace, (unsigned char*)targets, count);
+
+		XFlush(display);
+		XFree(targets);        
+	} else if (request->target == SAVE_TARGETS)
+        XChangeProperty(display, request->requestor, request->property, 0, 32, PropModeReplace, NULL, 0);
+    else {
+        int i;
+        for (i = 0;  i < formatCount;  i++) {
+			if (request->target != formats[i])
+				continue;
+			XChangeProperty(display, request->requestor, request->property, request->target,
+								8, PropModeReplace, (unsigned char*)clipboard, clipboard_len);
+            ret = 1;
+        }	    
+    }
+
+    XEvent reply = { SelectionNotify };
+    reply.xselection.property = request->property;
+    reply.xselection.display = request->display;
+    reply.xselection.requestor = request->requestor;
+    reply.xselection.selection = request->selection;
+    reply.xselection.target = request->target;
+    reply.xselection.time = request->time;
+
+    XSendEvent(display, request->requestor, False, 0, &reply);
+
+    return ret;
+}
+
 int main(void) {
     Display* display = XOpenDisplay(NULL);
  
@@ -420,14 +241,11 @@ int main(void) {
  
     XSelectInput(display, window, ExposureMask | KeyPressMask); 
 
-	const Atom UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
+	UTF8_STRING = XInternAtom(display, "UTF8_STRING", True);
+	SAVE_TARGETS = XInternAtom((Display*) display, "SAVE_TARGETS", False);
+
 	const Atom CLIPBOARD = XInternAtom(display, "CLIPBOARD", 0);
 	const Atom XSEL_DATA = XInternAtom(display, "XSEL_DATA", 0);
-
-	const Atom SAVE_TARGETS = XInternAtom((Display*) display, "SAVE_TARGETS", False);
-	const Atom TARGETS = XInternAtom((Display*) display, "TARGETS", False);
-	const Atom MULTIPLE = XInternAtom((Display*) display, "MULTIPLE", False);
-	const Atom ATOM_PAIR = XInternAtom((Display*) display, "ATOM_PAIR", False);
 	const Atom CLIPBOARD_MANAGER = XInternAtom((Display*) display, "CLIPBOARD_MANAGER", False);
 
 	// input
@@ -459,92 +277,38 @@ int main(void) {
 	// output
 	char text[] = "new string\0";
 
-	XSetSelectionOwner((Display*) display, CLIPBOARD, (Window) window, CurrentTime);
-
-	XConvertSelection((Display*) display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, (Window) window, CurrentTime);
-		
-	Bool running = True;
-	while (running) {
-		XNextEvent(display, &event);
-		if (event.type == SelectionRequest) {
-			const XSelectionRequestEvent* request = &event.xselectionrequest;
-
-			XEvent reply = { SelectionNotify };
-			reply.xselection.property = 0;
-
-			if (request->target == TARGETS) {
-				const Atom targets[] = { TARGETS,
-										MULTIPLE,
-										UTF8_STRING,
-										XA_STRING };
-
-				XChangeProperty(display,
-					request->requestor,
-					request->property,
-					4,
-					32,
-					PropModeReplace,
-					(unsigned char*) targets,
-					sizeof(targets) / sizeof(targets[0]));
-
-				reply.xselection.property = request->property;
-			}
-
-			if (request->target == MULTIPLE) {	
-				Atom* targets = NULL;
-
-				Atom actualType = 0;
-				int actualFormat = 0;
-				unsigned long count = 0, bytesAfter = 0;
-
-				XGetWindowProperty(display, request->requestor, request->property, 0, LONG_MAX, False, ATOM_PAIR, &actualType, &actualFormat, &count, &bytesAfter, (unsigned char **) &targets);
-
-				unsigned long i;
-				for (i = 0; i < count; i += 2) {
-					Bool found = False; 
-
-					if (targets[i] == UTF8_STRING || targets[i] == XA_STRING) {
-						XChangeProperty((Display*) display,
-							request->requestor,
-							targets[i + 1],
-							targets[i],
-							8,
-							PropModeReplace,
-							(unsigned char*) text,
-							sizeof(text));
-						XFlush(display);
-						running = False;
-					} else {
-						targets[i + 1] = None;
-					}
-				}
-
-				XChangeProperty((Display*) display,
-					request->requestor,
-					request->property,
-					ATOM_PAIR,
-					32,
-					PropModeReplace,
-					(unsigned char*) targets,
-					count);
-
-				XFlush(display);
-				XFree(targets);
-
-				reply.xselection.property = request->property;
-			}
-
-			reply.xselection.display = request->display;
-			reply.xselection.requestor = request->requestor;
-			reply.xselection.selection = request->selection;
-			reply.xselection.target = request->target;
-			reply.xselection.time = request->time;
-
-			XSendEvent((Display*) display, request->requestor, False, 0, &reply);
-			XFlush(display);
-		}
+	XSetSelectionOwner(display, CLIPBOARD, window, CurrentTime);
+	if (XGetSelectionOwner(display, CLIPBOARD) != window) {
+    	printf("X11 failed to become owner of clipboard selection");
+		return -1;
 	}
+		
+	while (1) {
+		XNextEvent(display, &event);
+		if (event.type == SelectionRequest &&
+            XHandleClipboardSelection(display, &event, text, sizeof(text) / sizeof(char)))
+                break;
+    }
 
+	if (XGetSelectionOwner(display, CLIPBOARD) == window) {
+        XConvertSelection(display, CLIPBOARD_MANAGER, SAVE_TARGETS, None, window, CurrentTime);
+        XEvent event;
+        XPending(display);
+
+        if (QLength(display) || XEventsQueued(display, QueuedAlready) + XEventsQueued(display, QueuedAfterReading)) {
+            XNextEvent(display, &event);
+
+            switch (event.type) {
+                case SelectionRequest:
+                    XHandleClipboardSelection(display, &event, text, sizeof(text) / sizeof(char));
+                    break;
+                case SelectionNotify:
+                    if (event.xselection.target == SAVE_TARGETS)
+                        break;
+                default: break;
+            }
+        }
+    }
     XCloseDisplay(display);
  }
 ```
